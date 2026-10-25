@@ -95,6 +95,7 @@ function p() {
     fi
   fi
   git pull --rebase
+  git pull --rebase origin $(branch)
 }
 
 # Auto completer for p. Can be used with zsh's `compdef _p p`.
