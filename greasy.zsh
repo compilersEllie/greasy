@@ -49,33 +49,30 @@ function root() {
 }
 
 # 'Stash' changes on the current branch using temporary commits. Roughly eq to `git stash`.
-function mtmp() {
-  MSG=" - $*"
-  if [[ -z $1 ]]; then
-    MSG=""
-  fi
-  git commit -m "TMP$MSG - added" --no-verify
+function wip() {
+  MSG="${1:-TMP}"
+  git commit -m "${MSG} - added (WIP)" --no-verify
   git add --all
-  git commit -m "TMP$MSG - modified" --no-verify
+  git commit -m "${MSG} - modified (WIP)" --no-verify
 }
 
 function amend() {
   git commit --amend "${@}"
 }
 
-function is_tmp() {
-  git log | head -n 1 | sed "s/^ *//" | grep 'TMP - '
+function is_wip() {
+  git log --oneline | head -n 1 | grep ' \(WIP\)$'
 }
 
-# Un-does an `mtmp` roughly eq to `git stash pop`.
-function unmtmp() {
-  cmt="$(is_tmp)"
+# Un-does an `wip` roughly eq to `git stash pop`.
+function unwip() {
+  cmt="$(is_wip)"
   if [[ -z $cmt ]]; then
-    echo 'No tmps found'; return
+    echo 'No WIPs found'; return
   fi
   git reset 'HEAD~'
   git stash
-  cmt="$(is_tmp)"
+  cmt="$(is_wip)"
   if [[ -n $cmt ]]; then
     git reset 'HEAD~'
     git add --all
@@ -142,7 +139,7 @@ alias skip="git rebase --skip"
 alias -s git='git clone'
 
 # Grep for git for:
-alias gg="git grep -n" # lines
+alias gg="git grep -n --column" # lines
 alias gf="git ls-files | grep" # files
 alias gt="git ls-tree -r --name-only HEAD | tree --fromfile"
 alias gdt="git ls-tree --name-only -r HEAD | sed 's|\/[^\/]*$||' | sort | uniq | tree --fromfile"
@@ -153,7 +150,12 @@ alias glr="git log --first-parent --color=always --all --decorate --oneline --gr
 # Takes the output from gg or gl and opens each file in your editor of choice.
 # Example: `gg " wat " | ge` will open all files stored in git containing ' wat '.
 function ge() {
-  IFS=$'\n' files=( $(sed "s/^\([^:]*\)\(\(:[0-9]*\)\?\):.*$/\1\2/" | sed "s/.*-> //" | sort | uniq -c | sort -n -r | sed "s/^[\t ]*[0-9]* //" ) )
+  IFS=$'\n' files=( \
+    $(sed "s/^\([^:]*\)\(:[0-9]*\)\?\(:[0-9]*\)\?:.*$/\1\2\3/" | \
+      sed "s/.*-> //" | \
+      sort | uniq -c | sort -n -r | \
+      sed "s/^[\t ]*[0-9]* //" \
+    ) )
   $EDITOR "${files[@]}" "${@}"
 }
 # List authors
@@ -221,9 +223,16 @@ function hub() {
 }
 
 function edit() {
+    PWD="$(pwd)"
     ROOT="$(root)"
-    cd $ROOT
-    IFS=$'\n' files=( $(git status --porcelain --null | tr '\0' '\n' | sed "s/[A-Z]* *\(.*\)$/\1/" | sed "s|^|$ROOT/|") )
+    IFS=$'\n' files=(
+      $(git status --porcelain --null \
+        | tr '\0' '\n' \
+        | sed "s/[A-Z? ]* *\(.*\)$/\1/" \
+        | sed "s|^|$ROOT/|" \
+        | xargs realpath --relative-to=$PWD
+      )
+    )
     $EDITOR "${files[@]}" "${@}"
 }
 
